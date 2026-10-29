@@ -101,29 +101,27 @@ If Git asks for your name or email, configure your Git author identity locally, 
 
 The Blueprint sets `NODE_ENV=production` and the allowed frontend origins. It does not need secrets or credentials.
 
-### 3. Connect `www.jaswanthna.com` in Render
+### 3. Connect `convertly.jaswanthna.com` in Render
 
 1. Open the deployed service's **Settings → Custom Domains**.
-2. Add `www.jaswanthna.com`. Render automatically adds the root domain and redirects it to `www`.
+2. Add `convertly.jaswanthna.com`.
 3. Copy the exact `onrender.com` hostname shown for your service; use that hostname in the GoDaddy CNAME record below.
 
 ### 4. Set DNS records in GoDaddy
 
-In the domain's DNS management, add or update these records:
+In the domain's DNS management, add this record:
 
 | Type | Name/Host | Value |
 | --- | --- | --- |
-| CNAME | `www` | The exact service hostname from Render, for example `convertly-jaswanthna.onrender.com` |
-| A | `@` | `216.24.57.1` |
+| CNAME | `convertly` | The exact service hostname from Render, for example `convertly-jaswanthna.onrender.com` |
 
-Use the actual Render hostname rather than copying the example. Remove conflicting records for `www` and `@`, and remove any `AAAA` records that point this domain to another host. Keep email-related MX/TXT records unchanged. If GoDaddy shows a TTL choice, its default is fine.
+Use the actual Render hostname rather than copying the example. Remove any conflicting DNS record for the `convertly` host, but leave the root (`@`) and `www` records and all email-related MX/TXT records unchanged. If GoDaddy shows a TTL choice, its default is fine.
 
 ### 5. Verify HTTPS and test the live site
 
 1. Return to Render's **Custom Domains** page and select **Verify**. DNS changes may take time to propagate.
 2. Wait for Render to issue the TLS certificate.
-3. Open <https://www.jaswanthna.com>, upload a small sample file, and test a conversion and download.
-4. Confirm <https://jaswanthna.com> redirects to the `www` hostname.
+3. Open <https://convertly.jaswanthna.com>, upload a small sample file, and test a conversion and download.
 
 Do not share GoDaddy/Render passwords or API tokens; enter credentials only in their respective dashboards. For provider-specific behavior, see [Render's custom domain guide](https://render.com/docs/custom-domains) and [other DNS provider instructions](https://render.com/docs/configure-other-dns).
 
