@@ -68,7 +68,7 @@ For Windows, if LibreOffice is installed but not discoverable as `libreoffice`, 
 
 ## Deploy to Render
 
-The root `render.yaml` defines one Render web service. It installs the backend and frontend from their separate folders, builds the frontend, then starts the backend to serve both the frontend and API. The service uses Render's free plan by default. Free services can sleep when idle and take longer to answer the first request after inactivity. Change the plan in Render if you need continuous availability.
+The root `render.yaml` defines one Render web service. It installs the backend and frontend from their separate folders, builds the frontend, then starts the backend to serve both the frontend and API. The build explicitly installs frontend development dependencies because Vite is needed to create the production bundle, even though the service runs with `NODE_ENV=production`. The service uses Render's free plan by default. Free services can sleep when idle and take longer to answer the first request after inactivity. Change the plan in Render if you need continuous availability.
 
 ### 1. Review and push the deployment files
 
@@ -140,7 +140,7 @@ The production build commands are the same commands configured in the Blueprint:
 
 ```powershell
 npm ci --prefix backend
-npm ci --prefix frontend
+npm ci --include=dev --prefix frontend
 npm run build --prefix frontend
 npm start --prefix backend
 ```
