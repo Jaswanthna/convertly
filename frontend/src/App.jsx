@@ -157,7 +157,7 @@ export default function App() {
     <div className="app-shell" data-theme={theme}>
       <header className="topbar">
         <a className="brand" href="#" aria-label="Convertly home">
-          <span className="brand-mark"><ArrowLeftRight size={19} strokeWidth={2.5} /></span>
+          <span className="brand-mark"><img src="/convertly-mark.svg" alt="" /></span>
           <span>convertly<span className="brand-dot">.</span></span>
         </a>
         <nav className={`nav-links ${menuOpen ? "nav-open" : ""}`}>
@@ -285,7 +285,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <a className="brand footer-brand" href="#"><span className="brand-mark"><ArrowLeftRight size={17} strokeWidth={2.5} /></span><span>convertly<span className="brand-dot">.</span></span></a>
+        <a className="brand footer-brand" href="#"><span className="brand-mark"><img src="/convertly-mark.svg" alt="" /></span><span>convertly<span className="brand-dot">.</span></span></a>
         <div className="contact-details">
           <strong className="contact-heading">Contact</strong>
           <span><b>Name:</b> Jaswanth NA</span>
