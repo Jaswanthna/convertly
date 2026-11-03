@@ -17,6 +17,7 @@ backend/
     conversion.js   Conversion adapters and temporary-file cleanup
     formats.js      Format definitions and per-source conversion options
     server.js       Express API, health check, and production frontend hosting
+  test/             Conversion and API regression tests
   package.json
   package-lock.json
 frontend/
@@ -55,6 +56,14 @@ npm run dev
 
 Open <http://localhost:5173>. Vite proxies `/api` requests to the backend at <http://localhost:4000>. Check the backend with <http://localhost:4000/api/health>.
 
+Run the backend's conversion and API tests from the repository root:
+
+```powershell
+npm test --prefix backend
+```
+
+The GitHub Actions validation workflow runs these tests and builds the frontend for pull requests and pushes to `main`.
+
 ## Conversion support
 
 The API advertises options for the uploaded file and installed conversion engines. Built-in conversions include:
@@ -66,9 +75,15 @@ The API advertises options for the uploaded file and installed conversion engine
 - HTML → Markdown, and common source/config formats (JSON, XML, YAML, JavaScript/TypeScript, Python, Java, C/C++, C#, Go, Rust, PHP, Ruby, shell, SQL, CSS, Vue, and Svelte) → fenced Markdown or plain text.
 - Plain text/Markdown → PDF or the other text format.
 
-Installing LibreOffice enables additional format-preserving office-document conversions. There is no universal, lossless conversion between every possible pair of file types. Image uploads are limited to 50 MB; files are processed in temporary workspaces and removed after conversion.
+Installing LibreOffice enables additional format-preserving office-document conversions. There is no universal, lossless conversion between every possible pair of file types. Image uploads are limited to 50 MB; files are staged in per-request temporary directories and removed after conversion or request failure.
 
 Markdown output is intended to make extracted or structured content easier for AI tools to read. It does not infer meaning from pixels: images can be converted to other image formats or PDF, but image OCR and scanned-PDF OCR are not included. PDF/DOC text exports cannot preserve the original layout, and unsupported or binary formats are not falsely advertised as Markdown conversions.
+
+### Upload safety and service limits
+
+- Uploads are written to generated temporary filenames, not user-supplied paths. The API checks known file signatures or UTF-8 text validity before conversion, enforces a 50 MB limit, limits decoded images to 40 megapixels and PDF page renders to 16 megapixels, and permits one simultaneous conversion per service process by default (`MAX_CONCURRENT_CONVERSIONS` can be adjusted after resource testing).
+- Conversion outputs and upload workspaces are removed when the download finishes, the connection closes, or conversion fails. The service also sets basic browser security headers and request timeouts.
+- These protections are not a substitute for malware scanning or sandboxing: LibreOffice and file parsers run on the same host as the API. Avoid sensitive or untrusted public workloads until converters are isolated and a malware-scanning strategy is in place. The in-memory concurrency cap is per process and is not a distributed rate limiter.
 
 For Windows, if LibreOffice is installed but not discoverable as `libreoffice`, set `LIBREOFFICE_PATH` to its executable path before starting the backend.
 
@@ -97,7 +112,7 @@ The root `render.yaml` defines one Render web service. It installs the backend a
 Render deploys from GitHub, so the application files must be committed and pushed to the repository's `main` branch first. From the repository root, stage only the intended project files and lockfiles:
 
 ```powershell
-git add .gitignore README.md render.yaml .github/workflows/version.yml `
+git add .gitignore README.md render.yaml .github/workflows/version.yml .github/workflows/test.yml `
   backend/package.json backend/package-lock.json backend/src `
   frontend/package.json frontend/package-lock.json frontend/index.html `
   frontend/vite.config.js frontend/src
@@ -152,7 +167,7 @@ Do not share GoDaddy/Render passwords or API tokens; enter credentials only in t
 - `GET /api/health` — service health check; configured as the Render health-check path.
 - `GET /api/formats?source=pdf` — lists supported output formats for a file extension.
 - `POST /api/convert` — multipart form fields `file` and `target`; responds with the converted file as a download.
-- Upload limit: 50 MB, one file per conversion. Errors return JSON with an `error` message.
+- Upload limit: 50 MB, one file per conversion; one conversion runs at a time per service process by default. Errors return JSON with an `error` message.
 - Set `PORT` to override the local default backend port (`4000`). Render provides `PORT` automatically.
 - Set comma-separated `FRONTEND_ORIGIN` values when hosting the frontend on a separate origin. The production Blueprint serves frontend and API together, so normal app requests are same-origin.
 

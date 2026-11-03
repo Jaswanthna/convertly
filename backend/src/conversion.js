@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { createWriteStream } from "node:fs";
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { copyFile, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,19 @@ const textExtensions = new Set([
   "js", "mjs", "cjs", "ts", "jsx", "tsx", "py", "java", "c", "h",
   "cpp", "hpp", "cs", "go", "rs", "php", "rb", "sh", "sql", "css",
   "scss", "vue", "svelte"
+]);
+const officeZipExtensions = new Set(["docx", "xlsx", "odt"]);
+const legacyOfficeExtensions = new Set(["doc", "xls"]);
+const imageFormats = new Map([
+  ["jpg", "jpeg"],
+  ["jpeg", "jpeg"],
+  ["png", "png"],
+  ["webp", "webp"],
+  ["avif", "heif"],
+  ["tif", "tiff"],
+  ["tiff", "tiff"],
+  ["gif", "gif"],
+  ["svg", "svg"]
 ]);
 globalThis.Path2D = Path2D;
 const standardFontDataUrl = `${path.join(
@@ -72,7 +85,7 @@ function textToMarkdown(text, extension) {
     try {
       text = JSON.stringify(JSON.parse(text), null, 2);
     } catch (error) {
-      throw new Error(`The uploaded JSON file is invalid: ${error.message}`);
+      throw new ConversionError(`The uploaded JSON file is invalid: ${error.message}`, 422);
     }
   }
   if (extension === "md") return text;
@@ -80,6 +93,86 @@ function textToMarkdown(text, extension) {
   const longestFence = Math.max(2, ...Array.from(text.matchAll(/`+/g), ([match]) => match.length));
   const fence = "`".repeat(longestFence + 1);
   return `${fence}${language}\n${text.trimEnd()}\n${fence}\n`;
+}
+
+export class ConversionError extends Error {
+  constructor(message, statusCode = 422) {
+    super(message);
+    this.name = "ConversionError";
+    this.statusCode = statusCode;
+  }
+}
+
+async function validateInput(sourcePath, extension) {
+  if (!formats[extension]) {
+    throw new ConversionError(`Conversion from .${extension || "unknown"} is not supported.`, 415);
+  }
+
+  const fileHandle = await open(sourcePath, "r");
+  const header = Buffer.alloc(1024);
+  let bytesRead;
+  try {
+    ({ bytesRead } = await fileHandle.read(header, 0, header.length, 0));
+  } finally {
+    await fileHandle.close();
+  }
+  const fileHeader = header.subarray(0, bytesRead);
+
+  if (extension === "pdf") {
+    if (!fileHeader.includes(Buffer.from("%PDF-"))) {
+      throw new ConversionError("The uploaded file is not a valid PDF.", 415);
+    }
+    return;
+  }
+
+  if (officeZipExtensions.has(extension)) {
+    if (fileHeader[0] !== 0x50 || fileHeader[1] !== 0x4b) {
+      throw new ConversionError(`The uploaded file does not appear to be a valid .${extension.toUpperCase()} file.`, 415);
+    }
+    return;
+  }
+
+  if (legacyOfficeExtensions.has(extension)) {
+    const oleSignature = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    if (!fileHeader.subarray(0, oleSignature.length).equals(oleSignature)) {
+      throw new ConversionError(`The uploaded file does not appear to be a valid .${extension.toUpperCase()} file.`, 415);
+    }
+    return;
+  }
+
+  if (extension === "rtf") {
+    if (!fileHeader.toString("utf8").trimStart().startsWith("{\\rtf")) {
+      throw new ConversionError("The uploaded file does not appear to be a valid RTF document.", 415);
+    }
+    return;
+  }
+
+  if (imageFormats.has(extension)) {
+    try {
+      const metadata = await sharp(sourcePath, { limitInputPixels: 40_000_000 }).metadata();
+      if (!metadata.format || metadata.format !== imageFormats.get(extension)) {
+        throw new ConversionError(`The uploaded file content does not match the .${extension} extension.`, 415);
+      }
+      return;
+    } catch (error) {
+      if (error instanceof ConversionError) throw error;
+      throw new ConversionError("The uploaded image is invalid, unsupported, or exceeds the pixel limit.", 415);
+    }
+  }
+
+  if (textExtensions.has(extension) || extension === "csv") {
+    const decoder = new TextDecoder("utf-8", { fatal: true });
+    try {
+      for await (const chunk of createReadStream(sourcePath)) {
+        if (chunk.includes(0)) throw new Error("Binary content");
+        decoder.decode(chunk, { stream: true });
+      }
+      decoder.decode();
+      return;
+    } catch {
+      throw new ConversionError("This file is not valid UTF-8 text. Binary and unsupported encodings cannot be converted as text.", 415);
+    }
+  }
 }
 
 function getWorksheetRows(worksheet) {
@@ -167,7 +260,7 @@ async function convertPdf(sourcePath, targetPath, target) {
     const page = await pdf.getPage(1);
     const scale = 1.5;
     const viewport = page.getViewport({ scale });
-    const pixelLimit = 100_000_000;
+    const pixelLimit = 16_000_000;
     const safeScale = viewport.width * viewport.height > pixelLimit
       ? scale * Math.sqrt(pixelLimit / (viewport.width * viewport.height))
       : scale;
@@ -185,7 +278,7 @@ async function convertPdf(sourcePath, targetPath, target) {
 }
 
 async function convertImage(sourcePath, targetPath, target) {
-  const image = sharp(sourcePath, { limitInputPixels: 100_000_000 });
+  const image = sharp(sourcePath, { limitInputPixels: 40_000_000 });
   if (target === "jpg") return image.jpeg({ quality: 88 }).toFile(targetPath);
   if (target === "png") return image.png().toFile(targetPath);
   if (target === "webp") return image.webp({ quality: 88 }).toFile(targetPath);
@@ -194,7 +287,7 @@ async function convertImage(sourcePath, targetPath, target) {
   if (target === "gif") return image.gif().toFile(targetPath);
   if (target === "pdf") {
     const metadata = await image.metadata();
-    const page = await sharp(sourcePath).rotate().png().toBuffer();
+    const page = await sharp(sourcePath, { limitInputPixels: 40_000_000 }).rotate().png().toBuffer();
     await new Promise((resolve, reject) => {
       const document = new PDFDocument({
         autoFirstPage: false,
@@ -215,19 +308,23 @@ async function convertImage(sourcePath, targetPath, target) {
   throw new Error(`Image conversion to ${target} is not supported.`);
 }
 
-export async function convertFile({ buffer, originalName, target }) {
+export async function convertFile({ buffer, inputPath, originalName, target }) {
   const sourceExtension = path.extname(originalName).slice(1).toLowerCase();
-  if (!formats[target]) throw new Error("That output format is not supported.");
+  if (!formats[target]) throw new ConversionError("That output format is not supported.");
+  if (!inputPath && !Buffer.isBuffer(buffer)) {
+    throw new TypeError("Provide either an uploaded input path or a file buffer.");
+  }
   const workspace = await mkdtemp(path.join(os.tmpdir(), "convertly-"));
 
   const baseName = path.basename(originalName, path.extname(originalName))
     .replace(/[^\p{L}\p{N}._-]/gu, "_")
     .slice(0, 100) || "converted-file";
-  const sourcePath = path.join(workspace, `source.${sourceExtension}`);
+  const sourcePath = inputPath || path.join(workspace, `source.${sourceExtension}`);
   const targetPath = path.join(workspace, `${baseName}.${target}`);
 
   try {
-    await writeFile(sourcePath, buffer, { flag: "wx" });
+    if (!inputPath) await writeFile(sourcePath, buffer, { flag: "wx" });
+    await validateInput(sourcePath, sourceExtension);
 
     if (imageExtensions.has(sourceExtension) && (imageExtensions.has(target) || target === "pdf")) {
       await convertImage(sourcePath, targetPath, target);
@@ -271,7 +368,7 @@ export async function convertFile({ buffer, originalName, target }) {
       const convertedPath = path.join(workspace, `source.${target}`);
       await copyFile(convertedPath, targetPath);
     } else {
-      throw new Error(`Conversion from .${sourceExtension || "unknown"} to .${target} is not supported by the configured engines.`);
+      throw new ConversionError(`Conversion from .${sourceExtension || "unknown"} to .${target} is not supported by the configured engines.`);
     }
 
     return {
@@ -282,6 +379,7 @@ export async function convertFile({ buffer, originalName, target }) {
     };
   } catch (error) {
     await rm(workspace, { recursive: true, force: true });
+    if (error instanceof ConversionError) throw error;
     if (error.code === "ENOENT") {
       throw new Error("A required conversion engine is not installed. Check the backend setup instructions.");
     }
