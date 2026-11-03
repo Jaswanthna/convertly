@@ -14,6 +14,35 @@ export const formats = {
   rtf: { label: "Rich text", mime: "application/rtf", extension: "rtf", group: "office" },
   txt: { label: "Plain text", mime: "text/plain", extension: "txt", group: "text" },
   md: { label: "Markdown", mime: "text/markdown", extension: "md", group: "text" },
+  html: { label: "HTML", mime: "text/html", extension: "html", group: "text" },
+  htm: { label: "HTML", mime: "text/html", extension: "htm", group: "text" },
+  json: { label: "JSON", mime: "application/json", extension: "json", group: "text" },
+  xml: { label: "XML", mime: "application/xml", extension: "xml", group: "text" },
+  yaml: { label: "YAML", mime: "application/yaml", extension: "yaml", group: "text" },
+  yml: { label: "YAML", mime: "application/yaml", extension: "yml", group: "text" },
+  js: { label: "JavaScript", mime: "text/javascript", extension: "js", group: "text" },
+  mjs: { label: "JavaScript module", mime: "text/javascript", extension: "mjs", group: "text" },
+  cjs: { label: "JavaScript module", mime: "text/javascript", extension: "cjs", group: "text" },
+  ts: { label: "TypeScript", mime: "text/typescript", extension: "ts", group: "text" },
+  jsx: { label: "React JSX", mime: "text/jsx", extension: "jsx", group: "text" },
+  tsx: { label: "React TSX", mime: "text/tsx", extension: "tsx", group: "text" },
+  py: { label: "Python", mime: "text/x-python", extension: "py", group: "text" },
+  java: { label: "Java", mime: "text/x-java-source", extension: "java", group: "text" },
+  c: { label: "C source", mime: "text/x-c", extension: "c", group: "text" },
+  h: { label: "C/C++ header", mime: "text/x-c", extension: "h", group: "text" },
+  cpp: { label: "C++ source", mime: "text/x-c++src", extension: "cpp", group: "text" },
+  hpp: { label: "C++ header", mime: "text/x-c++hdr", extension: "hpp", group: "text" },
+  cs: { label: "C# source", mime: "text/x-csharp", extension: "cs", group: "text" },
+  go: { label: "Go source", mime: "text/x-go", extension: "go", group: "text" },
+  rs: { label: "Rust source", mime: "text/x-rust", extension: "rs", group: "text" },
+  php: { label: "PHP source", mime: "text/x-php", extension: "php", group: "text" },
+  rb: { label: "Ruby source", mime: "text/x-ruby", extension: "rb", group: "text" },
+  sh: { label: "Shell script", mime: "text/x-shellscript", extension: "sh", group: "text" },
+  sql: { label: "SQL", mime: "application/sql", extension: "sql", group: "text" },
+  css: { label: "CSS", mime: "text/css", extension: "css", group: "text" },
+  scss: { label: "SCSS", mime: "text/x-scss", extension: "scss", group: "text" },
+  vue: { label: "Vue component", mime: "text/x-vue", extension: "vue", group: "text" },
+  svelte: { label: "Svelte component", mime: "text/x-svelte", extension: "svelte", group: "text" },
   png: { label: "PNG image", mime: "image/png", extension: "png", group: "image" },
   jpg: { label: "JPG image", mime: "image/jpeg", extension: "jpg", group: "image" },
   webp: { label: "WebP image", mime: "image/webp", extension: "webp", group: "image" },
@@ -26,6 +55,12 @@ export const formats = {
 const officeFormats = ["docx", "doc", "odt", "rtf", "txt", "pdf"];
 const spreadsheetFormats = ["xlsx", "xls", "csv"];
 const imageFormats = ["png", "jpg", "webp", "avif", "tiff", "gif"];
+const textExtensions = new Set([
+  "txt", "md", "html", "htm", "json", "xml", "yaml", "yml",
+  "js", "mjs", "cjs", "ts", "jsx", "tsx", "py", "java", "c", "h",
+  "cpp", "hpp", "cs", "go", "rs", "php", "rb", "sh", "sql", "css",
+  "scss", "vue", "svelte"
+]);
 
 async function commandAvailable(command) {
   try {
@@ -45,7 +80,7 @@ export async function getCapabilities(source) {
   if (sourceFormat?.group === "image") {
     targets = [...imageFormats, "pdf"].filter((target) => target !== extension);
   } else if (extension === "pdf") {
-    targets.push("png", "jpg", "txt");
+    targets.push("png", "jpg", "txt", "md");
     if (libreOffice) targets.push("docx", "doc", "odt", "rtf");
   } else if (extension === "csv") {
     targets = ["xlsx", "txt", "md", "pdf"];
@@ -67,7 +102,7 @@ export async function getCapabilities(source) {
     if (libreOffice) {
       targets = [...officeFormats, ...spreadsheetFormats].filter((target) => target !== extension);
     }
-  } else if (["txt", "md"].includes(extension)) {
+  } else if (textExtensions.has(extension)) {
     targets = ["pdf", "txt", "md"].filter((target) => target !== extension);
   }
 

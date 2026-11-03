@@ -83,7 +83,9 @@ app.use((error, _request, response, _next) => {
   if (error instanceof multer.MulterError) {
     return response.status(400).json({ error: error.message });
   }
-  const status = error.message.includes("not supported") ? 422 : 500;
+  const status = error.message.includes("not supported") || error.message.startsWith("The uploaded JSON file is invalid:")
+    ? 422
+    : 500;
   if (status === 500) console.error(error);
   response.status(status).json({
     error: status === 500 ? "The file could not be converted. Check that the required conversion engine is installed." : error.message

@@ -10,11 +10,18 @@ import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import sharp from "sharp";
+import TurndownService from "turndown";
 import WordExtractor from "word-extractor";
 import { formats } from "./formats.js";
 
 const execFileAsync = promisify(execFile);
 const imageExtensions = new Set(["png", "jpg", "webp", "avif", "tiff", "gif", "svg"]);
+const textExtensions = new Set([
+  "txt", "md", "html", "htm", "json", "xml", "yaml", "yml",
+  "js", "mjs", "cjs", "ts", "jsx", "tsx", "py", "java", "c", "h",
+  "cpp", "hpp", "cs", "go", "rs", "php", "rb", "sh", "sql", "css",
+  "scss", "vue", "svelte"
+]);
 globalThis.Path2D = Path2D;
 const standardFontDataUrl = `${path.join(
   path.dirname(fileURLToPath(import.meta.resolve("pdfjs-dist/legacy/build/pdf.mjs"))),
@@ -55,6 +62,24 @@ function markdownToText(markdown) {
     .replace(/(\*|_)(.*?)\1/g, "$2")
     .replace(/~~(.*?)~~/g, "$1")
     .replace(/`{1,3}([^`]+)`{1,3}/g, "$1");
+}
+
+function textToMarkdown(text, extension) {
+  if (["html", "htm"].includes(extension)) {
+    return new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" }).turndown(text);
+  }
+  if (extension === "json") {
+    try {
+      text = JSON.stringify(JSON.parse(text), null, 2);
+    } catch (error) {
+      throw new Error(`The uploaded JSON file is invalid: ${error.message}`);
+    }
+  }
+  if (extension === "md") return text;
+  const language = extension === "yml" ? "yaml" : extension;
+  const longestFence = Math.max(2, ...Array.from(text.matchAll(/`+/g), ([match]) => match.length));
+  const fence = "`".repeat(longestFence + 1);
+  return `${fence}${language}\n${text.trimEnd()}\n${fence}\n`;
 }
 
 function getWorksheetRows(worksheet) {
@@ -123,18 +148,19 @@ async function convertPdf(sourcePath, targetPath, target) {
     standardFontDataUrl
   }).promise;
   try {
-    if (target === "txt") {
+    if (["txt", "md"].includes(target)) {
       const pages = [];
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber);
         const content = await page.getTextContent();
-        pages.push(content.items
+        const pageText = content.items
           .filter((item) => "str" in item)
           .map((item) => `${item.str}${item.hasEOL ? "\n" : " "}`)
-          .join(""));
+          .join("").trim();
+        pages.push(target === "md" ? `## Page ${pageNumber}\n\n${pageText}` : pageText);
         page.cleanup();
       }
-      await writeFile(targetPath, pages.join("\n"), "utf8");
+      await writeFile(targetPath, pages.join(target === "md" ? "\n\n" : "\n"), "utf8");
       return;
     }
 
@@ -205,7 +231,7 @@ export async function convertFile({ buffer, originalName, target }) {
 
     if (imageExtensions.has(sourceExtension) && (imageExtensions.has(target) || target === "pdf")) {
       await convertImage(sourcePath, targetPath, target);
-    } else if (sourceExtension === "pdf" && ["png", "jpg", "txt"].includes(target)) {
+    } else if (sourceExtension === "pdf" && ["png", "jpg", "txt", "md"].includes(target)) {
       await convertPdf(sourcePath, targetPath, target);
     } else if (
       formats[sourceExtension]?.group === "spreadsheet" &&
@@ -215,12 +241,16 @@ export async function convertFile({ buffer, originalName, target }) {
       await convertSpreadsheet(sourcePath, sourceExtension, targetPath, target);
     } else if (["doc", "docx"].includes(sourceExtension) && ["txt", "md", "pdf"].includes(target)) {
       await convertWordDocument(sourcePath, targetPath, target);
-    } else if (["txt", "md"].includes(sourceExtension) && ["txt", "md"].includes(target)) {
+    } else if (textExtensions.has(sourceExtension) && ["txt", "md"].includes(target)) {
       const text = await readFile(sourcePath, "utf8");
-      await writeFile(targetPath, sourceExtension === "md" && target === "txt" ? markdownToText(text) : text, "utf8");
-    } else if (["txt", "md"].includes(sourceExtension) && target === "pdf") {
+      if (target === "md") await writeFile(targetPath, textToMarkdown(text, sourceExtension), "utf8");
+      else await writeFile(targetPath, sourceExtension === "md" ? markdownToText(text) : text, "utf8");
+    } else if (textExtensions.has(sourceExtension) && target === "pdf") {
       const text = await readFile(sourcePath, "utf8");
-      await makePdfFromText(sourceExtension === "md" ? markdownToText(text) : text, targetPath);
+      const pdfText = sourceExtension === "txt"
+        ? text
+        : markdownToText(textToMarkdown(text, sourceExtension));
+      await makePdfFromText(pdfText, targetPath);
     } else if (
       ["office", "spreadsheet"].includes(formats[sourceExtension]?.group) &&
       (["office", "spreadsheet"].includes(formats[target]?.group) ||

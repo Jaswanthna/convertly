@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowLeftRight, ArrowRight, Check, ChevronDown, CircleHelp,
   CloudUpload, File, FileImage, FileText, FileType2, Github, LockKeyhole,
-  Menu, ShieldCheck, Sparkles, X
+  LogIn, LogOut, Mail, Menu, Moon, ShieldCheck, Sparkles, Sun, X
 } from "lucide-react";
+import { supabase, supabaseConfigured } from "./supabase.js";
+import { version } from "./version.json";
 
 const fileSize = (size) => size < 1024 * 1024 ? `${(size / 1024).toFixed(0)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`;
 
@@ -18,6 +20,40 @@ export default function App() {
   const [error, setError] = useState("");
   const [complete, setComplete] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem("convertly-theme") === "dark" ? "dark" : "light");
+  const [session, setSession] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+    localStorage.setItem("convertly-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (sessionError) setAuthMessage(sessionError.message);
+      setSession(data?.session || null);
+    }).catch((sessionError) => {
+      setAuthMessage(sessionError.message);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthMessage("");
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!file) return;
@@ -97,8 +133,28 @@ export default function App() {
   };
   const selectedFormat = formats.find((format) => format.id === target);
 
+  const signInWithGoogle = async () => {
+    if (!supabase) return;
+    setAuthMessage("");
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin }
+    });
+    if (signInError) setAuthMessage(signInError.message);
+  };
+
+  const signOut = async () => {
+    if (!supabase) return;
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) setAuthMessage(signOutError.message);
+    else {
+      setAccountOpen(false);
+      setSession(null);
+    }
+  };
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <header className="topbar">
         <a className="brand" href="#" aria-label="Convertly home">
           <span className="brand-mark"><ArrowLeftRight size={19} strokeWidth={2.5} /></span>
@@ -110,6 +166,21 @@ export default function App() {
         </nav>
         <div className="header-right">
           <span className="secure-label"><LockKeyhole size={13} /> Private & secure</span>
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+            title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+          >
+            {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+          </button>
+          <button
+            className="account-button"
+            aria-label={session ? "Open account" : "Sign in"}
+            onClick={() => { setAccountOpen(true); setAuthMessage(""); }}
+          >
+            {session ? <><span className="user-avatar">{(session.user.user_metadata?.full_name || session.user.email || "U").slice(0, 1).toUpperCase()}</span><span className="account-label">Account</span></> : <><LogIn size={15} /><span className="account-label">Sign in</span></>}
+          </button>
           <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
           </button>
@@ -120,8 +191,8 @@ export default function App() {
         <section className="hero">
           <div className="hero-copy">
             <div className="eyebrow"><span className="eyebrow-sparkle"><Sparkles size={13} /></span> YOUR FILES, YOUR WAY</div>
-            <h1>Everything converts.<br /><span>Nothing gets in your way.</span></h1>
-            <p className="hero-description">Documents, images, and more. Drop in a file, choose the format you need, and let’s make it happen.</p>
+            <h1>Files to formats.<br /><span>Content to Markdown.</span></h1>
+            <p className="hero-description">Convert documents, spreadsheets, web pages, and code into useful formats—including Markdown made for AI tools.</p>
             <div className="trust-row"><span><ShieldCheck size={16} /> Files stay private</span><i /><span>No account needed</span><i /><span>Up to 50 MB</span></div>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -215,9 +286,44 @@ export default function App() {
 
       <footer className="footer">
         <a className="brand footer-brand" href="#"><span className="brand-mark"><ArrowLeftRight size={17} strokeWidth={2.5} /></span><span>convertly<span className="brand-dot">.</span></span></a>
-        <span>File conversion, made easy.</span>
+        <div className="contact-details">
+          <strong className="contact-heading">Contact</strong>
+          <span><b>Name:</b> Jaswanth NA</span>
+          <a href="mailto:jaswanthna@gmail.com"><b>Email:</b> jaswanthna@gmail.com</a>
+          <a href="https://www.linkedin.com/in/jaswanth-na/" target="_blank" rel="noreferrer"><b>LinkedIn:</b> Jaswanth NA</a>
+        </div>
         <a className="footer-github" href="https://github.com/Jaswanthna/convertly" target="_blank" rel="noreferrer"><Github size={15} /> Built with care</a>
+        <span className="app-version">v{version}</span>
       </footer>
+
+      {accountOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAccountOpen(false); }}>
+          <section className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
+            <button className="modal-close" onClick={() => setAccountOpen(false)} aria-label="Close account dialog"><X size={18} /></button>
+            <div className="modal-icon"><LockKeyhole size={21} /></div>
+            {session ? (
+              <>
+                <h2 id="account-title">Your Convertly account</h2>
+                <p className="account-email">{session.user.user_metadata?.full_name || session.user.email}</p>
+                {session.user.user_metadata?.full_name && <p className="account-email">{session.user.email}</p>}
+                <p className="modal-description">Signed in with Google. Your account is managed securely by Supabase.</p>
+                <button className="google-button" onClick={signOut}><LogOut size={17} /> Sign out</button>
+              </>
+            ) : (
+              <>
+                <h2 id="account-title">Sign in to Convertly</h2>
+                <p className="modal-description">Create an account or sign in securely with your Google account. You can still convert files without signing in.</p>
+                <button className="google-button" onClick={signInWithGoogle} disabled={!supabaseConfigured}>
+                  <span className="google-mark">G</span> Continue with Google
+                </button>
+                {!supabaseConfigured && <p className="setup-hint">Google sign-in will be available after the Supabase project settings are added by the site owner.</p>}
+              </>
+            )}
+            {authMessage && <p className="notice notice-error" role="alert">{authMessage}</p>}
+            <p className="privacy-note"><LockKeyhole size={12} /> We never store your Google password.</p>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

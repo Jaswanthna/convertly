@@ -13,3 +13,7 @@ services:
         value: production
       - key: FRONTEND_ORIGIN
         value: https://convertly.jaswanthna.com
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
