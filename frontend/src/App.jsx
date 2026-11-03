@@ -193,7 +193,7 @@ export default function App() {
             <div className="eyebrow"><span className="eyebrow-sparkle"><Sparkles size={13} /></span> YOUR FILES, YOUR WAY</div>
             <h1>Files to formats.<br /><span>Content to Markdown.</span></h1>
             <p className="hero-description">Convert documents, spreadsheets, web pages, and code into useful formats—including Markdown made for AI tools.</p>
-            <div className="trust-row"><span><ShieldCheck size={16} /> Files stay private</span><i /><span>No account needed</span><i /><span>Up to 50 MB</span></div>
+            <div className="trust-row"><span><ShieldCheck size={16} /> Files stay private</span><i /><span>Up to 50 MB</span></div>
           </div>
           <div className="hero-art" aria-hidden="true">
             <div className="orbit orbit-one"></div><div className="orbit orbit-two"></div>
