@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowLeftRight, ArrowRight, Check, ChevronDown, CircleHelp,
   CloudUpload, File, FileImage, FileText, FileType2, Github, LockKeyhole,
-  LogIn, LogOut, Mail, Menu, Moon, ShieldCheck, Sparkles, Sun, X
+  LogOut, Mail, Menu, Moon, ShieldCheck, Sparkles, Sun, UserRound, X
 } from "lucide-react";
 import { supabase, supabaseConfigured } from "./supabase.js";
 import { version } from "./version.json";
@@ -157,7 +157,7 @@ export default function App() {
     <div className="app-shell" data-theme={theme}>
       <header className="topbar">
         <a className="brand" href="#" aria-label="Convertly home">
-          <span className="brand-mark"><img src="/convertly-mark.svg" alt="" /></span>
+          <span className="brand-mark"><ArrowLeftRight size={19} strokeWidth={2.5} /></span>
           <span>convertly<span className="brand-dot">.</span></span>
         </a>
         <nav className={`nav-links ${menuOpen ? "nav-open" : ""}`}>
@@ -179,7 +179,7 @@ export default function App() {
             aria-label={session ? "Open account" : "Sign in"}
             onClick={() => { setAccountOpen(true); setAuthMessage(""); }}
           >
-            {session ? <><span className="user-avatar">{(session.user.user_metadata?.full_name || session.user.email || "U").slice(0, 1).toUpperCase()}</span><span className="account-label">Account</span></> : <><LogIn size={15} /><span className="account-label">Sign in</span></>}
+            {session ? <><span className="user-avatar">{(session.user.user_metadata?.full_name || session.user.email || "U").slice(0, 1).toUpperCase()}</span><span className="account-label">Account</span></> : <><UserRound size={16} /><span className="account-label">Sign in</span></>}
           </button>
           <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
@@ -285,7 +285,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <a className="brand footer-brand" href="#"><span className="brand-mark"><img src="/convertly-mark.svg" alt="" /></span><span>convertly<span className="brand-dot">.</span></span></a>
+        <a className="brand footer-brand" href="#"><span className="brand-mark"><ArrowLeftRight size={17} strokeWidth={2.5} /></span><span>convertly<span className="brand-dot">.</span></span></a>
         <div className="contact-details">
           <strong className="contact-heading">Contact</strong>
           <span><b>Name:</b> Jaswanth NA</span>
