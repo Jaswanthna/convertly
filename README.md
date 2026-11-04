@@ -1,6 +1,6 @@
 # Convertly
 
-Convertly is a file-conversion app with a React frontend and a Node.js/Express backend. Source code and dependencies are kept in separate `frontend/` and `backend/` folders. In production, the backend serves the built frontend and API on the same origin.
+Convertly is a focused file-conversion app with a React frontend and a Node.js/Express backend. Source code and dependencies are kept in separate `frontend/` and `backend/` folders. In production, the backend serves the built frontend and API on the same origin.
 
 ## Requirements
 
@@ -14,21 +14,26 @@ Python, `requirements.txt`, and Docker are not required.
 ```text
 backend/
   src/
-    conversion.js   Conversion adapters and temporary-file cleanup
+    conversion.js   Format-specific adapters, validation, and cleanup
     formats.js      Format definitions and per-source conversion options
-    server.js       Express API, health check, and production frontend hosting
-  test/             Conversion and API regression tests
+    server.js       Express API, upload controls, health check, and static hosting
+  test/
+    conversion.test.js  Conversion and cleanup regression tests
+    server.test.js      API and upload-limit tests
   package.json
   package-lock.json
 frontend/
   src/              React interface and styles
     supabase.js      Optional Google sign-in client
     version.json     UI version shown in the footer
+  public/            Static assets
   index.html
   vite.config.js    Local /api proxy to the backend
   package.json
   package-lock.json
-.github/workflows/version.yml  Patch-version automation for main
+.github/workflows/
+  test.yml          Backend tests and frontend production build
+  version.yml       Patch-version automation for main
 render.yaml         Render Blueprint for production deployment
 ```
 
@@ -54,7 +59,9 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` requests to the backend at <http://localhost:4000>. Check the backend with <http://localhost:4000/api/health>.
+Open <http://localhost:5173>. Vite proxies `/api` requests to the backend at <http://localhost:4000>. Check the backend with <http://localhost:4000/api/health>, which should return `{"status":"ok"}`.
+
+The local interface includes persistent light/dark themes, drag-and-drop or browse-to-upload, file-specific output choices, conversion progress/errors, a sign-in dialog, and contact links in the footer. Google sign-in remains disabled until its Supabase and Google OAuth settings are configured as described below. Conversion does not require an account.
 
 Run the backend's conversion and API tests from the repository root:
 
@@ -62,28 +69,29 @@ Run the backend's conversion and API tests from the repository root:
 npm test --prefix backend
 ```
 
-The GitHub Actions validation workflow runs these tests and builds the frontend for pull requests and pushes to `main`.
+The tests cover Markdown conversions (source, JSON, HTML, CSV, PDF), content/encoding rejection, output cleanup, API health/security headers, missing and malformed requests, upload size limits, and advertised formats. The GitHub Actions validation workflow runs these tests and builds the frontend for pull requests and pushes to `main`.
 
 ## Conversion support
 
 The API advertises options for the uploaded file and installed conversion engines. Built-in conversions include:
 
-- Common images ↔ PNG, JPG, WebP, AVIF, TIFF, and GIF; images → PDF.
-- PDF → first-page PNG/JPG, extracted text, or Markdown with page headings.
+- Common images ↔ PNG, JPG, WebP, AVIF, TIFF, and GIF; images → PDF. Pixel decoding is capped to limit memory use.
+- PDF → first-page PNG/JPG, extracted text, or Markdown with page headings. PDF rendering is capped to a maximum pixel count per rendered page.
 - CSV ↔ XLSX; CSV/XLSX → text, Markdown table, or PDF. Spreadsheet exports use the first worksheet.
 - DOC/DOCX → extracted text, Markdown, or PDF. These text-based exports do not preserve layout.
 - HTML → Markdown, and common source/config formats (JSON, XML, YAML, JavaScript/TypeScript, Python, Java, C/C++, C#, Go, Rust, PHP, Ruby, shell, SQL, CSS, Vue, and Svelte) → fenced Markdown or plain text.
 - Plain text/Markdown → PDF or the other text format.
 
-Installing LibreOffice enables additional format-preserving office-document conversions. There is no universal, lossless conversion between every possible pair of file types. Image uploads are limited to 50 MB; files are staged in per-request temporary directories and removed after conversion or request failure.
+Installing LibreOffice enables additional office-format conversions. There is no universal, lossless conversion between every possible pair of file types. Image uploads are limited to 50 MB; files are staged in per-request temporary directories and removed after conversion or request failure.
 
 Markdown output is intended to make extracted or structured content easier for AI tools to read. It does not infer meaning from pixels: images can be converted to other image formats or PDF, but image OCR and scanned-PDF OCR are not included. PDF/DOC text exports cannot preserve the original layout, and unsupported or binary formats are not falsely advertised as Markdown conversions.
 
 ### Upload safety and service limits
 
-- Uploads are written to generated temporary filenames, not user-supplied paths. The API checks known file signatures or UTF-8 text validity before conversion, enforces a 50 MB limit, limits decoded images to 40 megapixels and PDF page renders to 16 megapixels, and permits one simultaneous conversion per service process by default (`MAX_CONCURRENT_CONVERSIONS` can be adjusted after resource testing).
-- Conversion outputs and upload workspaces are removed when the download finishes, the connection closes, or conversion fails. The service also sets basic browser security headers and request timeouts.
+- Uploads are written to generated temporary filenames, not user-supplied paths. The API checks known signatures for supported binary formats and UTF-8 text validity for text-based formats before conversion. It enforces a 50 MB upload limit, limits decoded images to 40 megapixels and PDF page renders to 16 megapixels, and permits one simultaneous conversion per service process by default (`MAX_CONCURRENT_CONVERSIONS` can be adjusted after resource testing).
+- Conversion outputs and upload workspaces are removed when the download finishes, the connection closes, or conversion fails. The service adds basic browser security headers, request-size limits, and timeouts. Invalid request types, unsupported content, missing targets, and oversized uploads receive explicit client errors.
 - These protections are not a substitute for malware scanning or sandboxing: LibreOffice and file parsers run on the same host as the API. Avoid sensitive or untrusted public workloads until converters are isolated and a malware-scanning strategy is in place. The in-memory concurrency cap is per process and is not a distributed rate limiter.
+- Monitoring/error reporting, backups for persistent data, malware scanning, converter isolation, and OCR are not included. Don’t upload sensitive files until you have reviewed the deployment, security controls, and privacy/retention needs for your use case.
 
 For Windows, if LibreOffice is installed but not discoverable as `libreoffice`, set `LIBREOFFICE_PATH` to its executable path before starting the backend.
 
@@ -94,12 +102,14 @@ For Windows, if LibreOffice is installed but not discoverable as `libreoffice`, 
 - Account identities and provider-managed email/profile information are stored by Supabase Auth. Convertly does not store passwords or maintain its own account database. There is no separate profile database yet; if app-specific user data is added later, store it in Supabase Postgres with Row Level Security enabled.
 - Contact: Jaswanth NA · [jaswanthna@gmail.com](mailto:jaswanthna@gmail.com) · [LinkedIn](https://www.linkedin.com/in/jaswanth-na/).
 
+The app currently does not save conversion history, uploaded files, or app-specific profile data. Supabase Auth manages account identities only after configured. A Supabase database table is not required for Google sign-in by itself.
+
 ### Configure Google sign-in
 
-1. Create a Supabase project and enable Google under **Authentication → Providers**.
+1. Create a Supabase project and enable Google under **Authentication → Providers**. In Google Cloud, configure the OAuth consent screen and add your account as a test user if the app remains in testing mode.
 2. Create a Google OAuth client in Google Cloud. Add the Supabase callback URL shown by the provider settings (`https://<project-ref>.supabase.co/auth/v1/callback`) as an authorized redirect URI.
 3. In Supabase **Authentication → URL Configuration**, set the site URL to your deployed Render URL (for example `https://convertly-jaswanthna.onrender.com`) and add that URL to the redirect allow list. Add `https://convertly.jaswanthna.com` too if you later enable the custom domain.
-4. In Render's service environment, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the Supabase project URL and public anon/publishable key. These are frontend build-time settings, so trigger a new deploy after adding or changing them. Never put a Supabase `service_role` key in the frontend or commit it to Git.
+4. In Render's service environment, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the Supabase project URL and public anon/publishable key. These are frontend build-time settings, so choose **Save, rebuild, and deploy** after adding or changing them. Never put a Supabase `service_role` key in the frontend or commit it to Git.
 
 Until those settings are added and Google is enabled, the sign-in dialog explains that sign-in is not configured; conversion remains usable.
 
@@ -107,34 +117,31 @@ Until those settings are added and Google is enabled, the sign-in dialog explain
 
 The root `render.yaml` defines one Render web service. It installs the backend and frontend from their separate folders, builds the frontend, then starts the backend to serve both the frontend and API. The build explicitly installs frontend development dependencies because Vite is needed to create the production bundle, even though the service runs with `NODE_ENV=production`. The service uses Render's free plan by default. Free services can sleep when idle and take longer to answer the first request after inactivity. Change the plan in Render if you need continuous availability.
 
-### 1. Review and push the deployment files
+### 1. Push changes to GitHub
 
-Render deploys from GitHub, so the application files must be committed and pushed to the repository's `main` branch first. From the repository root, stage only the intended project files and lockfiles:
+Render deploys from GitHub. For an existing checkout, review and commit only the files you intend to change; ignored dependencies/build outputs should not be staged. For example:
 
 ```powershell
-git add .gitignore README.md render.yaml .github/workflows/version.yml .github/workflows/test.yml `
-  backend/package.json backend/package-lock.json backend/src `
-  frontend/package.json frontend/package-lock.json frontend/index.html `
-  frontend/vite.config.js frontend/src
+git status --short
+git add README.md backend frontend .github/workflows render.yaml
 git diff --cached --check
 git status --short
 ```
 
-Review the staged file list. It should contain the application source, package manifests/lockfiles, README, `.gitignore`, and `render.yaml`—not `node_modules`, `dist`, `.env`, or temporary files. Then create and push the initial commit:
+Review the staged file list; do not commit `node_modules`, `dist`, `.env`, credentials, or temporary files. Then commit and push:
 
 ```powershell
-git commit -m "Prepare Convertly for Render deployment"
-git push -u origin main
+git commit -m "Describe your change"
+git push origin main
 ```
 
 If Git asks for your name or email, configure your Git author identity locally, then repeat the commit. Sign in to GitHub through your normal Git credential flow if the push requests authentication; never put access tokens or passwords in source files or share them in chat.
 
 ### 2. Create the Render service
 
-1. Sign in to the [Render Dashboard](https://dashboard.render.com/).
-2. Select **New → Blueprint** and connect the GitHub repository `Jaswanthna/convertly`.
-3. Select the `main` branch and deploy the Blueprint from the repository's `render.yaml`.
-4. Wait for the build and deploy to finish. In the service logs, confirm it starts successfully. Open the Render-provided `onrender.com` URL and check that the site loads and `/api/health` returns `{"status":"ok"}`.
+1. Sign in to the [Render Dashboard](https://dashboard.render.com/) and open the existing `convertly-jaswanthna` service (or create it once using **New → Blueprint** and connect `Jaswanthna/convertly` on `main`).
+2. Deploy the latest commit if Render does not deploy automatically.
+3. Wait for the build and deploy to finish. In the service logs, confirm it starts successfully. Open the Render-provided `onrender.com` URL and check that the site loads and `/api/health` returns `{"status":"ok"}`.
 
 The Blueprint sets `NODE_ENV=production` and the allowed frontend origins. Supabase frontend settings are optional Blueprint environment values; configure them in Render to enable Google sign-in.
 
@@ -168,8 +175,10 @@ Do not share GoDaddy/Render passwords or API tokens; enter credentials only in t
 - `GET /api/formats?source=pdf` — lists supported output formats for a file extension.
 - `POST /api/convert` — multipart form fields `file` and `target`; responds with the converted file as a download.
 - Upload limit: 50 MB, one file per conversion; one conversion runs at a time per service process by default. Errors return JSON with an `error` message.
+- Invalid/mismatched content is rejected; malformed requests return 400, oversized uploads return 413, unsupported file content returns 415, and conversion/target errors return 422. When the conversion slot is busy, the API returns 503 with `Retry-After`.
 - Set `PORT` to override the local default backend port (`4000`). Render provides `PORT` automatically.
 - Set comma-separated `FRONTEND_ORIGIN` values when hosting the frontend on a separate origin. The production Blueprint serves frontend and API together, so normal app requests are same-origin.
+- `MAX_CONCURRENT_CONVERSIONS` — optional per-process conversion limit. The default is 1; increase only after testing the available memory and CPU.
 
 The production build commands are the same commands configured in the Blueprint:
 
