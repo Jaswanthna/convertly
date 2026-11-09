@@ -61,6 +61,7 @@ test("JSON is validated and formatted as a fenced Markdown block", async () => {
   }
 });
 
+
 test("invalid JSON returns a client error", async () => {
   await assert.rejects(
     convertFile({ buffer: Buffer.from("{bad"), originalName: "data.json", target: "md" }),
